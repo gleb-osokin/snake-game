@@ -8,7 +8,9 @@ var aliases = {
         Window: frontendPath + 'global/Window.js',
         Phaser: frontendPath + 'global/Phaser.js',
         GlobalConsts: frontendPath + 'consts/GlobalConsts.js',
-        MathUtils: frontendPath + 'utils/MathUtils.js'
+        MathUtils: frontendPath + 'utils/MathUtils.js',
+        GameUtils: frontendPath + 'utils/GameUtils',
+        Snake: frontendPath + 'prefabs/Snake.js'
     };
 
 var webpackConfigSkeleton = {

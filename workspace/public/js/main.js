@@ -55,13 +55,18 @@
 	    __webpack_require__(2),
 	    __webpack_require__(3),
 	    __webpack_require__(4),
-	    __webpack_require__(5)
-	], __WEBPACK_AMD_DEFINE_RESULT__ = function(_, Window, GlobalConsts, MathUtils) {
+	    __webpack_require__(5),
+	    __webpack_require__(6)
+	], __WEBPACK_AMD_DEFINE_RESULT__ = function(_, 
+	        Window, 
+	        GlobalConsts, 
+	        MathUtils, 
+	        Snake) {
 	    'use strict';
 
 	    var bushVariationsCount = GlobalConsts.Sprites.BushVariationsCount,
 	        grid = GlobalConsts.Game.Grid,
-	        game, background, bushes, grass;
+	        game, background, bushes, grass, stepTime, snake, cursors;
 
 	    var gameParams = {
 	        preload: function() {
@@ -71,6 +76,7 @@
 	                game.load.image('bush' + i, imagesPath + 'bush' + i + '.png');
 	            }
 	            game.load.image('grass', imagesPath + 'grass.png');
+	            game.load.spritesheet('snake', imagesPath + 'snake.png', grid.Side, grid.Side, 5);
 	        },
 	        create: function() {
 	            game.physics.startSystem(Phaser.Physics.ARCADE);
@@ -90,13 +96,38 @@
 	                game.add.sprite(game.height - 32, i * 32, 'bush' + bushTypeIndex);
 	            }
 	            
-	            bushes = game.add.group();
-	            //bushes.enableBody = true;
+	            stepTime = game.time.now;
+	            snake = new Snake(game);
+	            
+	            cursors = game.input.keyboard.createCursorKeys();
 	        },
 	        update: function() {
-	        
+	            var now = game.time.now,
+	                timeLimit = stepTime + GlobalConsts.Game.InitialPlayerSpeed * 1000;
+	            if (now > timeLimit) {
+	                stepTime = now;
+	                makeStep();
+	            }
+	            handleKeys();
 	        }
 	       
+	    }
+	    
+	    function handleKeys() {
+	        var direction = GlobalConsts.Objects.Direction;
+	        if (cursors.left.isDown) {
+	            snake.turn(direction.Left);
+	        } else if (cursors.right.isDown) {
+	            snake.turn(direction.Right);
+	        } else if (cursors.up.isDown) {
+	            snake.turn(direction.Up);
+	        } else if (cursors.down.isDown) {
+	            snake.turn(direction.Down);
+	        }
+	    }
+	    
+	    function makeStep() {
+	        snake.move();
 	    }
 
 	    game = new Phaser.Game(GlobalConsts.Game.Width, 
@@ -1675,22 +1706,43 @@
 	        Game: {
 	            Width: 800,
 	            Height: 800,
-	            TileWidth: 32
+	            InitialPlayerSpeed: 1 // move per second
 	        },
 	        Paths: {
 	            Images: 'images/'
 	        },
 	        Sprites: {
 	            BushVariationsCount: 4
+	        },
+	        Objects: {
+	            Turn: {
+	                Left: 4,
+	                Right: 2
+	            },
+	            Direction: {
+	                Up: 0,
+	                Right: 1,
+	                Down: 2,
+	                Left: 3
+	            },
+	            SnakeSegment: {
+	                Body: 0,
+	                Head: 1,
+	                TurnRight: 2,
+	                Tail: 3,
+	                TurnLeft: 4
+	            }
 	        }
-	   };
+	    };
 	   
-	   consts.Game.Grid = {
-	        Width: consts.Game.Width / consts.Game.TileWidth,
-	        Height: consts.Game.Height / consts.Game.TileWidth
-	   }
+	    consts.Game.Grid = {
+	        Side: 32
+	    };
+
+	    consts.Game.Grid.Width = consts.Game.Width / consts.Game.Grid.Side;
+	    consts.Game.Grid.Height = consts.Game.Height / consts.Game.Grid.Side;
 	   
-	   return consts;
+	    return consts;
 	}.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
 
 /***/ },
@@ -1704,6 +1756,164 @@
 	           return Math.floor(Math.random() * (max - min + 1)) + min;
 	       }
 	   } 
+	}.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+
+/***/ },
+/* 6 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_DEFINE_ARRAY__ = [
+	    __webpack_require__(4),
+	    __webpack_require__(7)
+	], __WEBPACK_AMD_DEFINE_RESULT__ = function(GlobalConsts, GameUtils) {
+
+	    function Segment(game, pos, type, direction, previousSegment) {
+	        this.pos = pos,
+	        this.type = type;
+	        this.direction = direction || GlobalConsts.Objects.Direction.Up;
+	        this.sprite = game.add.sprite(pos.x, pos.y, 'snake');
+	        this.sprite.anchor.setTo(.5,.5);
+	        this.previousSegment = previousSegment;
+	        this.updateFrame();
+	    }
+	    
+	    Segment.prototype.updateFrame = function() {
+	        var direction = GlobalConsts.Objects.Direction;
+	        this.sprite.frame = this.type;
+	        switch(this.direction) {
+	            case direction.Up:
+	                this.sprite.angle = 0;
+	                break;
+	            case direction.Down:
+	                this.sprite.angle = 180;
+	                break;
+	            case direction.Left:
+	                this.sprite.angle = -90;
+	                break;
+	            case direction.Right:
+	                this.sprite.angle = 90;
+	                break;
+	        }
+	    };
+	   
+	    function Snake(game) {
+	        if (!game) {
+	            throw new Error('game argument must be present') ;
+	        }
+	        var center = GameUtils.getCenterTile(),
+	            segmentTypes = GlobalConsts.Objects.SnakeSegment,
+	            head = new Segment(game, center, segmentTypes.Head),
+	            body = new Segment(game, GameUtils.getRelativeTile(head.pos, 0, 1),
+	                segmentTypes.Body, null, head),
+	            tail = new Segment(game, GameUtils.getRelativeTile(body.pos, 0, 1),
+	                segmentTypes.Tail, null, body);
+	                
+	        this.game = game;
+	        this.head = head;
+	        this.tail = tail;
+	        this.direction = GlobalConsts.Objects.Direction.Up;
+	    }
+
+	    Snake.prototype.turn = function(turn) {
+	        this.direction = GameUtils.getNewDirection(this.head.direction, turn);
+	    }
+
+	    Snake.prototype.move = function() {
+	        var direction = GlobalConsts.Objects.Direction,
+	            segmentTypes = GlobalConsts.Objects.SnakeSegment,
+	            xOffset = 0,
+	            yOffset = 0;
+	            
+	        switch(this.direction) {
+	            case direction.Up:
+	                yOffset = -1;
+	                break;
+	            case direction.Down:
+	                yOffset = 1;
+	                break;
+	            case direction.Left:
+	                xOffset = -1;
+	                break;
+	            case direction.Right:
+	                xOffset = 1;
+	                break;
+	        }
+	        
+	        var currentHead = this.head;
+	        currentHead.type = this.direction === currentHead.direction
+	            ? segmentTypes.Body
+	            : GameUtils.getTurnType(currentHead.direction, this.direction);
+	            
+	        currentHead.direction = this.direction;
+	        this.head = new Segment(this.game, 
+	            GameUtils.getRelativeTile(currentHead.pos, xOffset, yOffset),
+	            segmentTypes.Head, this.direction, null);
+	        currentHead.previousSegment = this.head;
+	            
+	        this.tail.previousSegment.type = this.tail.type;
+	        this.tail.sprite.destroy();
+	        this.tail = this.tail.previousSegment;
+
+	        this.head.updateFrame();
+	        currentHead.updateFrame();
+	        this.tail.updateFrame();
+	    };
+	   
+	    return Snake;
+	}.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+
+/***/ },
+/* 7 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_DEFINE_ARRAY__ = [
+	    __webpack_require__(4)
+	], __WEBPACK_AMD_DEFINE_RESULT__ = function(GlobalConsts) {
+	    'use strict';
+	   
+	    return {
+	        getCenterTile: function() {
+	            var grid = GlobalConsts.Game.Grid;
+	            return {
+	                x: (grid.Width - 1) * grid.Side / 2,
+	                y: (grid.Height - 1) * grid.Side / 2
+	            };
+	        },
+	        getRelativeTile: function(pos, xOffset, yOffset) {
+	            var grid = GlobalConsts.Game.Grid;
+	            return {
+	                x: pos.x + xOffset * grid.Side,
+	                y: pos.y + yOffset * grid.Side
+	            }
+	        },
+	        getNewDirection: function(currentDirection, turn) {
+	            return currentDirection == turn ||
+	                    currentDirection + 2 == turn ||
+	                    currentDirection - 2 == turn
+	                ? currentDirection
+	                : turn;
+	        },
+	        getTurnType: function(currentDirection, newDirection) {
+	            var turns = GlobalConsts.Objects.Turn,
+	                direction = GlobalConsts.Objects.Direction;
+	            switch(newDirection) {
+	                case (currentDirection + 1):
+	                    return turns.Right;
+	                case (currentDirection - 1):
+	                case direction.Left:
+	                    return turns.Left;
+	                case direction.Up:
+	                    return turns.Right;
+	            }
+	            return currentDirection === newDirection - 1
+	                ? turns.Right
+	                : currentDirection === newDirection + 1
+	                ? currentDirection != (newDirection + 1)
+	                    ? turns.Left
+	                    : turns.Right
+	                : turns.Right;
+	        }
+	    };
 	}.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
 
 /***/ }
