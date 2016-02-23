@@ -5,10 +5,13 @@ define([
 function(GlobalConsts, GameUtils) {
 
     function Segment(game, pos, type, direction, previousSegment) {
+        var side = GlobalConsts.Game.Grid.Side;
         this.pos = pos,
         this.type = type;
         this.direction = direction || GlobalConsts.Objects.Direction.Up;
-        this.sprite = game.add.sprite(pos.x, pos.y, 'snake');
+        this.sprite = game.add.sprite(pos.x + side / 2, 
+                                        pos.y + side / 2, 
+                                        'snake');
         this.sprite.anchor.setTo(.5,.5);
         this.previousSegment = previousSegment;
         this.updateFrame();
@@ -32,7 +35,7 @@ function(GlobalConsts, GameUtils) {
                 break;
         }
     };
-   
+
     function Snake(game) {
         if (!game) {
             throw new Error('game argument must be present') ;
@@ -53,7 +56,11 @@ function(GlobalConsts, GameUtils) {
 
     Snake.prototype.turn = function(turn) {
         this.direction = GameUtils.getNewDirection(this.head.direction, turn);
-    }
+    };
+    
+    Snake.prototype.grow = function() {
+        this.shouldGrow = true;
+    };
 
     Snake.prototype.move = function() {
         var direction = GlobalConsts.Objects.Direction,
@@ -86,14 +93,27 @@ function(GlobalConsts, GameUtils) {
             GameUtils.getRelativeTile(currentHead.pos, xOffset, yOffset),
             segmentTypes.Head, this.direction, null);
         currentHead.previousSegment = this.head;
-            
-        this.tail.previousSegment.type = this.tail.type;
-        this.tail.sprite.destroy();
-        this.tail = this.tail.previousSegment;
+        
+        if (!this.shouldGrow) {
+            this.tail.previousSegment.type = this.tail.type;
+            this.tail.sprite.destroy();
+            this.tail = this.tail.previousSegment;
+            this.tail.updateFrame();
+        }
+        this.shouldGrow = false;
 
         this.head.updateFrame();
         currentHead.updateFrame();
-        this.tail.updateFrame();
+    };
+    
+    Snake.prototype.isTileOccupied = function(xOffset, yOffset) {
+        var segment = this.tail;
+        while (segment) {
+            if (GameUtils.isTileOccupied(segment, xOffset, yOffset))
+                return true;
+            segment = segment.previousSegment;
+        }
+        return false;
     };
    
     return Snake;

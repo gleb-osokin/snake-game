@@ -10,7 +10,9 @@ var aliases = {
         GlobalConsts: frontendPath + 'consts/GlobalConsts.js',
         MathUtils: frontendPath + 'utils/MathUtils.js',
         GameUtils: frontendPath + 'utils/GameUtils',
-        Snake: frontendPath + 'prefabs/Snake.js'
+        Snake: frontendPath + 'prefabs/Snake.js',
+        Map: frontendPath + 'prefabs/Map.js',
+        Food: frontendPath + 'prefabs/Food.js'
     };
 
 var webpackConfigSkeleton = {
@@ -55,4 +57,4 @@ function build(done) {
 module.exports = {
     build: build,
     watch: watch
-}
+};

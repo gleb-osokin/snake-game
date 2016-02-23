@@ -4,7 +4,11 @@ function() {
         Game: {
             Width: 800,
             Height: 800,
-            InitialPlayerSpeed: 1 // move per second
+            Initials: {
+                PlayerSpeed: 1, // move per second
+                FoodLifeSpan: 10, // turns,
+                FoodSpawnRate: 6 // turns
+            }
         },
         Paths: {
             Images: 'images/'

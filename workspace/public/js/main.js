@@ -51,67 +51,81 @@
 /* 1 */
 /***/ function(module, exports, __webpack_require__) {
 
-	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_DEFINE_ARRAY__ = [
+	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;/* global Phaser */
+
+	!(__WEBPACK_AMD_DEFINE_ARRAY__ = [
 	    __webpack_require__(2),
 	    __webpack_require__(3),
 	    __webpack_require__(4),
 	    __webpack_require__(5),
-	    __webpack_require__(6)
+	    __webpack_require__(6),
+	    __webpack_require__(8)
 	], __WEBPACK_AMD_DEFINE_RESULT__ = function(_, 
 	        Window, 
 	        GlobalConsts, 
 	        MathUtils, 
-	        Snake) {
+	        Snake,
+	        Map) {
 	    'use strict';
 
 	    var bushVariationsCount = GlobalConsts.Sprites.BushVariationsCount,
+	        initials = GlobalConsts.Game.Initials,
 	        grid = GlobalConsts.Game.Grid,
-	        game, background, bushes, grass, stepTime, snake, cursors;
+	        game, map, stepTime, snake, cursors;
+	        
+	    var counter = {
+	            FoodSpawn: 0
+	        };
 
 	    var gameParams = {
 	        preload: function() {
 	            var imagesPath = GlobalConsts.Paths.Images;
-	                bushVariationsCount = GlobalConsts.Sprites.BushVariationsCount;
-	            for (var i = 0; i < bushVariationsCount; i++) {
-	                game.load.image('bush' + i, imagesPath + 'bush' + i + '.png');
-	            }
+	            game.load.spritesheet('bushes', imagesPath + 'bushes.png', grid.Side, grid.Side, bushVariationsCount);
 	            game.load.image('grass', imagesPath + 'grass.png');
 	            game.load.spritesheet('snake', imagesPath + 'snake.png', grid.Side, grid.Side, 5);
+	            game.load.image('food', imagesPath + 'apple.png');
 	        },
 	        create: function() {
 	            game.physics.startSystem(Phaser.Physics.ARCADE);
 	            
 	            // make background
-	            grass = game.add.tileSprite(0, 0, game.width, game.height, 'grass');
+	            game.add.tileSprite(0, 0, game.width, game.height, 'grass');
 	            
+	            var bushMaxIndex = bushVariationsCount - 1;
 	            // make border
 	            for(var i = 0; i < grid.Width; i++) {
-	                var bushTypeIndex = MathUtils.randomInt(0, 3);
-	                game.add.sprite(i * 32, 0, 'bush' + bushTypeIndex);
-	                game.add.sprite(i * 32, game.width - 32, 'bush' + bushTypeIndex);
+	                var leftSprite = game.add.sprite(i * grid.Side, 0, 'bushes'),
+	                    rightSprite = game.add.sprite(i * grid.Side, game.width - grid.Side, 'bushes');
+	                    
+	                leftSprite.frame = MathUtils.randomInt(0, bushMaxIndex);
+	                rightSprite.frame = MathUtils.randomInt(0, bushMaxIndex);
 	            }
 	            for(var i = 1; i < grid.Height - 1; i++) {
-	                var bushTypeIndex = MathUtils.randomInt(0, 3);
-	                game.add.sprite(0, i * 32, 'bush' + bushTypeIndex);
-	                game.add.sprite(game.height - 32, i * 32, 'bush' + bushTypeIndex);
+	                var topSprite = game.add.sprite(0, i * grid.Side, 'bushes'),
+	                    bottomSprite = game.add.sprite(game.height - grid.Side, i * grid.Side, 'bushes');
+	                    
+	                topSprite.frame = MathUtils.randomInt(0, bushMaxIndex);
+	                bottomSprite.frame = MathUtils.randomInt(0, bushMaxIndex);
 	            }
 	            
 	            stepTime = game.time.now;
+	            map = new Map(game);
 	            snake = new Snake(game);
+	            
+	            map.add(snake);
 	            
 	            cursors = game.input.keyboard.createCursorKeys();
 	        },
 	        update: function() {
 	            var now = game.time.now,
-	                timeLimit = stepTime + GlobalConsts.Game.InitialPlayerSpeed * 1000;
+	                timeLimit = stepTime + initials.PlayerSpeed * 1000;
 	            if (now > timeLimit) {
 	                stepTime = now;
 	                makeStep();
 	            }
 	            handleKeys();
 	        }
-	       
-	    }
+	    };
 	    
 	    function handleKeys() {
 	        var direction = GlobalConsts.Objects.Direction;
@@ -126,8 +140,18 @@
 	        }
 	    }
 	    
+	    function handleCounter() {
+	        if (counter.FoodSpawn === 0) {
+	            map.addFood();
+	            counter.FoodSpawn = GlobalConsts.Game.Initials.FoodSpawnRate;
+	        }
+	        counter.FoodSpawn--;
+	    }
+	    
 	    function makeStep() {
 	        snake.move();
+	        handleCounter();
+	        map.checkFood();
 	    }
 
 	    game = new Phaser.Game(GlobalConsts.Game.Width, 
@@ -1706,7 +1730,11 @@
 	        Game: {
 	            Width: 800,
 	            Height: 800,
-	            InitialPlayerSpeed: 1 // move per second
+	            Initials: {
+	                PlayerSpeed: 1, // move per second
+	                FoodLifeSpan: 10, // turns,
+	                FoodSpawnRate: 6 // turns
+	            }
 	        },
 	        Paths: {
 	            Images: 'images/'
@@ -1755,7 +1783,7 @@
 	       randomInt: function(min, max) {
 	           return Math.floor(Math.random() * (max - min + 1)) + min;
 	       }
-	   } 
+	   };
 	}.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
 
 /***/ },
@@ -1768,10 +1796,13 @@
 	], __WEBPACK_AMD_DEFINE_RESULT__ = function(GlobalConsts, GameUtils) {
 
 	    function Segment(game, pos, type, direction, previousSegment) {
+	        var side = GlobalConsts.Game.Grid.Side;
 	        this.pos = pos,
 	        this.type = type;
 	        this.direction = direction || GlobalConsts.Objects.Direction.Up;
-	        this.sprite = game.add.sprite(pos.x, pos.y, 'snake');
+	        this.sprite = game.add.sprite(pos.x + side / 2, 
+	                                        pos.y + side / 2, 
+	                                        'snake');
 	        this.sprite.anchor.setTo(.5,.5);
 	        this.previousSegment = previousSegment;
 	        this.updateFrame();
@@ -1795,7 +1826,7 @@
 	                break;
 	        }
 	    };
-	   
+
 	    function Snake(game) {
 	        if (!game) {
 	            throw new Error('game argument must be present') ;
@@ -1816,7 +1847,11 @@
 
 	    Snake.prototype.turn = function(turn) {
 	        this.direction = GameUtils.getNewDirection(this.head.direction, turn);
-	    }
+	    };
+	    
+	    Snake.prototype.grow = function() {
+	        this.shouldGrow = true;
+	    };
 
 	    Snake.prototype.move = function() {
 	        var direction = GlobalConsts.Objects.Direction,
@@ -1849,14 +1884,27 @@
 	            GameUtils.getRelativeTile(currentHead.pos, xOffset, yOffset),
 	            segmentTypes.Head, this.direction, null);
 	        currentHead.previousSegment = this.head;
-	            
-	        this.tail.previousSegment.type = this.tail.type;
-	        this.tail.sprite.destroy();
-	        this.tail = this.tail.previousSegment;
+	        
+	        if (!this.shouldGrow) {
+	            this.tail.previousSegment.type = this.tail.type;
+	            this.tail.sprite.destroy();
+	            this.tail = this.tail.previousSegment;
+	            this.tail.updateFrame();
+	        }
+	        this.shouldGrow = false;
 
 	        this.head.updateFrame();
 	        currentHead.updateFrame();
-	        this.tail.updateFrame();
+	    };
+	    
+	    Snake.prototype.isTileOccupied = function(xOffset, yOffset) {
+	        var segment = this.tail;
+	        while (segment) {
+	            if (GameUtils.isTileOccupied(segment, xOffset, yOffset))
+	                return true;
+	            segment = segment.previousSegment;
+	        }
+	        return false;
 	    };
 	   
 	    return Snake;
@@ -1884,7 +1932,7 @@
 	            return {
 	                x: pos.x + xOffset * grid.Side,
 	                y: pos.y + yOffset * grid.Side
-	            }
+	            };
 	        },
 	        getNewDirection: function(currentDirection, turn) {
 	            return currentDirection == turn ||
@@ -1912,8 +1960,139 @@
 	                    ? turns.Left
 	                    : turns.Right
 	                : turns.Right;
+	        },
+	        tileToPos: function(xOffset, yOffset) {
+	            var isObj = xOffset.hasOwnProperty('x'),
+	                x = isObj ? xOffset.x : xOffset,
+	                y = isObj ? xOffset.y : yOffset,
+	                grid = GlobalConsts.Game.Grid;
+	            return {
+	                x: x * grid.Side,
+	                y: y * grid.Side
+	            };
+	        },
+	        posToTile: function(xOffset, yOffset) {
+	            var isObj = xOffset.hasOwnProperty('x'),
+	                x = isObj ? xOffset.x : xOffset,
+	                y = isObj ? xOffset.y : yOffset,
+	                grid = GlobalConsts.Game.Grid;
+	            return {
+	                x: Math.floor(x / grid.Side),
+	                y: Math.floor(y / grid.Side)
+	            };
+	        },
+	        isTileOccupied: function(obj, xOffset, yOffset) {
+	            if (!obj)
+	                return false;
+	            
+	            if (obj.isTileOccupied && obj.isTileOccupied(xOffset, yOffset))
+	                return true;
+	            
+	            if (obj.pos) {
+	                var tile = this.posToTile(obj.pos);
+	                if (tile.x === xOffset && tile.y === yOffset)
+	                    return true;
+	            }
+	            
+	            return false;
 	        }
 	    };
+	}.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+
+/***/ },
+/* 8 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_DEFINE_ARRAY__ = [
+	    __webpack_require__(2),
+	    __webpack_require__(7),
+	    __webpack_require__(9)
+	], __WEBPACK_AMD_DEFINE_RESULT__ = function(_, GameUtils, Food) {
+	    
+	    function Map(game) {
+	        if (!game) {
+	            throw new Error('game argument must be present') ;
+	        }
+	        this.game = game;
+	        this.objects = [];
+	        this.food = [];
+	    }
+	    
+	    Map.prototype.add = function(gameObj) {
+	        this.objects.push(gameObj);
+	    };
+	    
+	    Map.prototype.addFood = function() {
+	        var food = new Food(this.game);
+	        this.objects.push(food);
+	        this.food.push(food);
+	    };
+	    
+	    Map.prototype.remove = function(gameObj) {
+	        var index = this.objects.indexOf(gameObj);
+	        if (index >= 0) {
+	            this.objects.splice(index, 1);
+	        }
+	    };
+	    
+	    Map.prototype.isTileOccupied = function(xOffset, yOffset) {
+	        for(var i = 0, len = this.objects.length; i < len; i++) {
+	            return GameUtils.isTileOccupied(this.objects[i], xOffset, yOffset);
+	        }
+	        return false;
+	    };
+	    
+	    Map.prototype.checkFood = function() {
+	        for (var i = 0, len = this.food.length; i < len; i++) {
+	            var food = this.food[i];
+	            food.spendTime();
+	        }
+	        this.food = _.filter(this.food, function(value) {
+	           return !this.isDestroyed;
+	        });
+	    };
+	    
+	    return Map;
+	}.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
+
+/***/ },
+/* 9 */
+/***/ function(module, exports, __webpack_require__) {
+
+	var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;!(__WEBPACK_AMD_DEFINE_ARRAY__ = [
+	    __webpack_require__(7),
+	    __webpack_require__(5),
+	    __webpack_require__(4)
+	], __WEBPACK_AMD_DEFINE_RESULT__ = function(GameUtils, MathUtils, GlobalConsts) {
+	    
+	    function Food(game) {
+	        if (!game) {
+	            throw new Error('game argument must be present') ;
+	        }
+	        this.game = game;
+	        this.pos = GameUtils.tileToPos(this.getRandomTile());
+	        this.sprite = game.add.sprite(this.pos.x, this.pos.y, 'food');
+	        this.lifespan = GlobalConsts.Game.Initials.FoodLifeSpan;
+	        this.isDestroyed = false;
+	    }
+	    
+	    Food.prototype.getRandomTile = function() {
+	        var grid = GlobalConsts.Game.Grid;
+	        return {
+	            x: MathUtils.randomInt(1, grid.Width - 2),
+	            y: MathUtils.randomInt(1, grid.Height - 2)
+	        };
+	    };
+	    
+	    Food.prototype.spendTime = function() {
+	      this.lifespan--;
+	      if (this.lifespan === 0) {
+	          this.sprite.destroy();
+	          this.isDestroyed = true;
+	      }
+	    };
+	    
+	    return Food;
 	}.apply(exports, __WEBPACK_AMD_DEFINE_ARRAY__), __WEBPACK_AMD_DEFINE_RESULT__ !== undefined && (module.exports = __WEBPACK_AMD_DEFINE_RESULT__));
 
 /***/ }
